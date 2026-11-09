@@ -6,11 +6,13 @@ Streamlit entry point. Run locally with:
     pip install -r requirements.txt
     streamlit run app.py
 """
+from pathlib import Path
+
 import streamlit as st
 
 st.set_page_config(
     page_title="Geopolitical Intelligence & Risk Monitor",
-    page_icon="♞",
+    page_icon="🌐",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -23,7 +25,7 @@ st.markdown(CSS, unsafe_allow_html=True)
 # ── Sidebar: global controls ────────────────────────────────────────────────
 with st.sidebar:
     st.markdown(
-        "<div style='font-family:EB Garamond,serif;font-size:1.5rem;line-height:1.1'>♞ Strategic<br>Intelligence</div>"
+        "<div style='font-family:EB Garamond,serif;font-size:1.5rem;line-height:1.1'>Strategic<br>Intelligence</div>"
         "<div style='color:#BDA786;font-size:.7rem;letter-spacing:2.5px;margin:4px 0 10px 0'>GEO-RISK · FINANCE DESK</div>",
         unsafe_allow_html=True,
     )
@@ -62,14 +64,15 @@ with st.sidebar:
                 "Anthropic API key", type="password", value=st.session_state.get("anthropic_key", ""),
                 help="Optional. Lets Claude rewrite the live 12-point brief as analyst prose. Kept in this session only.")
 
+VIEWS = Path(__file__).resolve().parent / "views"
 pages = [
-    st.Page("views/home.py", title="Command Brief", icon="♞", default=True),
-    st.Page("views/risk_map.py", title="Global Risk Map", icon="🛰️"),
-    st.Page("views/dossier.py", title="Country Dossier", icon="📁"),
-    st.Page("views/escalation.py", title="Escalation & Strike-back", icon="⚔️"),
-    st.Page("views/wire.py", title="Intelligence Wire", icon="📡"),
-    st.Page("views/markets_view.py", title="Market Transmission", icon="📈"),
-    st.Page("views/calendar_view.py", title="Calendar & Watchlist", icon="🗓️"),
-    st.Page("views/method.py", title="Methodology & Sources", icon="📜"),
+    st.Page(VIEWS / "home.py", title="Command Brief", icon=":material/shield:", default=True),
+    st.Page(VIEWS / "risk_map.py", title="Global Risk Map", icon=":material/public:"),
+    st.Page(VIEWS / "dossier.py", title="Country Dossier", icon=":material/folder_open:"),
+    st.Page(VIEWS / "escalation.py", title="Escalation & Strike-back", icon=":material/warning:"),
+    st.Page(VIEWS / "wire.py", title="Intelligence Wire", icon=":material/rss_feed:"),
+    st.Page(VIEWS / "markets_view.py", title="Market Transmission", icon=":material/trending_up:"),
+    st.Page(VIEWS / "calendar_view.py", title="Calendar & Watchlist", icon=":material/calendar_month:"),
+    st.Page(VIEWS / "method.py", title="Methodology & Sources", icon=":material/menu_book:"),
 ]
 st.navigation(pages).run()

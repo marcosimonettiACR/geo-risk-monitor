@@ -30,7 +30,8 @@ LEXICON = [
     (r"\bsanction(?:s|ed)?\b|\bembargo\b|\bentity list\b|\basset freeze", 2.0, "Sanctions & Trade"),
     (r"\btariffs?\b|\btrade war\b|\bexport controls?\b|\brare earths?\b|\bchip (?:ban|curbs)", 1.6, "Sanctions & Trade"),
     (r"\boil\b|\bcrude\b|\bbrent\b|\blng\b|\bgas (?:supply|prices?)\b|\bopec\+?\b|\brefiner(?:y|ies)\b|\bpipeline\b", 1.2, "Energy"),
-    (r"\bcyber ?attacks?\b|\bhack(?:ed|ers|ing)\b|\bransomware\b|\bsabotage\b|\bsubsea cable", 2.2, "Cyber & Hybrid"),
+    (r"\bcyber|\bhack(?:ed|ers|ing)\b|\bransomware\b|\bsabotage\b|\bsubsea cable", 2.2, "Cyber & Hybrid"),
+    (r"\battack(?:s|ed)?\b", 1.2, "Military"),
     (r"\bprotests?\b|\bunrest\b|\briots?\b|\bcrackdown\b|\bstate of emergency\b", 1.6, "Political"),
     (r"\belection\b|\bimpeach|\bno-confidence\b|\bresign(?:s|ed|ation)\b|\bsnap poll\b", 1.0, "Political"),
     (r"\bebola\b|\boutbreak\b|\bpandemic\b|\bpheic\b|\bcholera\b", 2.2, "Health"),
@@ -138,12 +139,35 @@ _STOP = set("the and for with from that this after over into amid says said will
 
 
 def _tokens(s: str) -> set[str]:
-    return {t for t in _TOKEN.findall(s.lower()) if t not in _STOP}
+    """Lower-cased, de-hyphenated, crudely singularised content words."""
+    s = s.lower().replace("-", "").replace("'s", "")
+    return {t[:-1] if t.endswith("s") and len(t) > 4 else t for t in _TOKEN.findall(s) if t not in _STOP}
+
+
+def same_story(a: dict, b: dict) -> bool:
+    """Heuristic: are two headlines the same underlying event?
+
+    1. Near-identical wording (Jaccard ≥ 0.35 on content words), or
+    2. Same set of ≥2 countries plus a shared theme or content word (Iran+France+cyber), or
+    3. Same lead country, a shared theme and ≥2 shared content words.
+    """
+    ta, tb = a["_tok"], b["_tok"]
+    jac = len(ta & tb) / max(1, len(ta | tb)) if ta and tb else 0.0
+    if jac >= 0.35:
+        return True
+    ca, cb = set(a["countries"]), set(b["countries"])
+    shared_theme = bool(set(a["themes"][:2]) & set(b["themes"][:2]))
+    if len(ca) >= 2 and ca == cb and (shared_theme or ta & tb):
+        return True
+    if a["countries"] and b["countries"] and a["countries"][0] == b["countries"][0] and shared_theme \
+            and len(ta & tb) >= 2:
+        return True
+    return False
 
 
 def rank_headlines(items: list[dict], risk_lookup: dict[str, float], now: datetime | None = None,
                    half_life_h: float = 14.0, limit: int = 12, max_age_h: float = 72.0,
-                   per_country_cap: int = 3) -> list[dict]:
+                   per_country_cap: int = 2) -> list[dict]:
     """Score = escalation relevance × country risk × recency × source weight,
     then cluster near-duplicates (corroboration boosts the cluster) and
     enforce diversity across countries/theatres."""
@@ -166,8 +190,7 @@ def rank_headlines(items: list[dict], risk_lookup: dict[str, float], now: dateti
     clusters: list[dict] = []
     for it in scored:
         for cl in clusters:
-            a, b = it["_tok"], cl["_tok"]
-            if a and b and len(a & b) / max(1, len(a | b)) >= 0.42:
+            if same_story(it, cl):
                 cl["sources"].add(it["source"])
                 cl["score"] += 0.25 * it["score"]
                 break
@@ -177,10 +200,11 @@ def rank_headlines(items: list[dict], risk_lookup: dict[str, float], now: dateti
 
     picked, per_country = [], defaultdict(int)
     for cl in clusters:
-        key = cl["countries"][0] if cl["countries"] else "_"
-        if per_country[key] >= per_country_cap:
+        # diversity: no country may appear in more than `per_country_cap` items
+        if any(per_country[c] >= per_country_cap for c in cl["countries"][:2]):
             continue
-        per_country[key] += 1
+        for c in cl["countries"][:2] or ["_"]:
+            per_country[c] += 1
         cl = {k: v for k, v in cl.items() if k != "_tok"}
         cl["n_sources"] = len(cl["sources"])
         cl["sources"] = sorted(cl["sources"])
